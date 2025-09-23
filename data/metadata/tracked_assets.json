@@ -1,0 +1,33 @@
+{
+  "equities": {
+    "GOOG": {
+      "ipo_date": "Unknown",
+      "last_data_pull": "2025-09-22T16:22:19.155404",
+      "latest_price": 252.8800048828125,
+      "company_name": "Alphabet Inc."
+    },
+    "AAPL": {
+      "ipo_date": "Unknown",
+      "last_data_pull": "2025-09-22T16:22:22.117748",
+      "latest_price": 256.0799865722656,
+      "company_name": "Apple Inc."
+    },
+    "OKLO": {
+      "ipo_date": "Unknown",
+      "last_data_pull": "2025-09-22T16:22:25.772006",
+      "latest_price": 140.3000030517578,
+      "company_name": "Oklo Inc."
+    }
+  },
+  "bonds": {},
+  "crypto": {},
+  "commodities": {
+    "GC=F": {
+      "ipo_date": "Unknown",
+      "last_data_pull": "2025-09-22T16:22:27.215259",
+      "latest_price": 3776.5,
+      "company_name": "Unknown"
+    }
+  },
+  "futures": {}
+}
