@@ -103,3 +103,16 @@ tmp/
 
 # Configuration files with sensitive data
 # configs/api_keys.json
+
+#my ignores
+data/assets/bonds/*
+data/assets/commodities/*
+data/assets/crypto/*
+data/assets/equities/*
+data/assets/futures/*
+data/metadata/logs/*
+data/metadata/saves/*
+data/metadata/tracked_assets.json
+data/metadata/data/*
+data/metadata/configs/*
+
