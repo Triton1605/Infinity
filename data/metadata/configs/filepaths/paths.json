@@ -1,0 +1,15 @@
+{
+  "data_dir": "data",
+  "assets_dir": "data/assets",
+  "equities_dir": "data/assets/equities",
+  "bonds_dir": "data/assets/bonds",
+  "crypto_dir": "data/assets/crypto",
+  "commodities_dir": "data/assets/commodities",
+  "futures_dir": "data/assets/futures",
+  "metadata_dir": "data/metadata",
+  "saves_dir": "saves",
+  "configs_dir": "configs",
+  "logs_dir": "logs",
+  "tracked_assets_file": "data/metadata/tracked_assets.json",
+  "filepath_registry": "data/metadata/filepath_registry.json"
+}
