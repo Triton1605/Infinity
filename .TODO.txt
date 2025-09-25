@@ -11,3 +11,5 @@
 -keep errors from bringing menu to the top/front
 -create a factory reset BASH script
 -delete events with deleted assets
+-create options simulator
+-create options suggestion from default asset analysis config
