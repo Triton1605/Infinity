@@ -96,9 +96,45 @@ class ChartController:
                 self.canvas.draw()
                 return
             
+            # Check if we should show market cap
+            show_market_cap = (hasattr(self.parent, 'show_market_cap_var') and 
+                             self.parent.show_market_cap_var.get() and
+                             self.parent.asset_type == "equities" and
+                             self.parent.asset_data.get('market_cap_history'))
+            
+            # Create secondary axis if needed
+            ax2 = None
+            if show_market_cap:
+                ax2 = self.ax.twinx()
+            
             # Plot price line
-            self.ax.plot(filtered_df.index, filtered_df['close'], 
-                        label=f"{self.parent.symbol}", linewidth=2, color='blue')
+            line1 = self.ax.plot(filtered_df.index, filtered_df['close'], 
+                        label=f"{self.parent.symbol} Price", linewidth=2, color='blue')
+            
+            # Plot market cap if enabled
+            if show_market_cap and ax2:
+                # Get market cap data and filter by date range
+                market_cap_data = self.parent.asset_data['market_cap_history']
+                market_cap_df = pd.DataFrame(market_cap_data)
+                market_cap_df['date'] = pd.to_datetime(market_cap_df['date'], utc=True)
+                market_cap_df.set_index('date', inplace=True)
+                
+                # Convert to timezone-naive to match price data
+                market_cap_df.index = market_cap_df.index.tz_convert(None)
+                
+                # Filter market cap data to match the price data date range
+                filtered_market_cap = market_cap_df[
+                    (market_cap_df.index >= filtered_df.index.min()) & 
+                    (market_cap_df.index <= filtered_df.index.max())
+                ]
+                
+                if not filtered_market_cap.empty:
+                    line2 = ax2.plot(filtered_market_cap.index, filtered_market_cap['market_cap_billions'], 
+                            label=f"{self.parent.symbol} Market Cap", linewidth=2, color='green', alpha=0.7)
+                    ax2.set_ylabel("Market Cap (Billions $)", color='green')
+                    ax2.tick_params(axis='y', labelcolor='green')
+                else:
+                    print("No market cap data found for the selected date range")
             
             # Plot events as vertical lines
             for event in self.parent.events:
@@ -130,10 +166,24 @@ class ChartController:
             
             # Set chart title and labels
             date_info = self._get_date_info_string()
-            self.ax.set_title(f"{self.parent.symbol} Price Chart{date_info}")
+            title = f"{self.parent.symbol} Price Chart{date_info}"
+            if show_market_cap:
+                title += " with Market Cap"
+            self.ax.set_title(title)
+            
             self.ax.set_xlabel("Date")
-            self.ax.set_ylabel("Price ($)")
-            self.ax.legend()
+            self.ax.set_ylabel("Price ($)", color='blue')
+            self.ax.tick_params(axis='y', labelcolor='blue')
+            
+            # Combine legends if we have both price and market cap
+            if show_market_cap and ax2:
+                # Get handles and labels from both axes
+                lines1, labels1 = self.ax.get_legend_handles_labels()
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                self.ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+            else:
+                self.ax.legend()
+            
             self.ax.grid(True, alpha=0.3)
             
             # Set reasonable axis limits
@@ -153,6 +203,8 @@ class ChartController:
             
         except Exception as e:
             print(f"Error updating chart: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _get_date_info_string(self):
         """Get date info string for chart title."""

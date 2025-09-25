@@ -29,6 +29,15 @@ class AssetAnalysisWindow:
         if not self.asset_data:
             messagebox.showerror("Error", f"Could not load data for {symbol}")
             return
+            
+        if self.asset_type == "equities" and self.asset_data:
+            print(f"Debug: Asset data keys: {self.asset_data.keys()}")
+            if 'market_cap_history' in self.asset_data:
+                print(f"Debug: Market cap history has {len(self.asset_data['market_cap_history'])} entries")
+                print(f"Debug: First market cap entry: {self.asset_data['market_cap_history'][0] if self.asset_data['market_cap_history'] else 'None'}")
+                print(f"Debug: Last market cap entry: {self.asset_data['market_cap_history'][-1] if self.asset_data['market_cap_history'] else 'None'}")
+            else:
+                print("Debug: No market_cap_history found in asset data")
         
         # Initialize events
         self.events = self.load_events()
@@ -36,6 +45,9 @@ class AssetAnalysisWindow:
         
         # Initialize exclusion ranges
         self.pattern_exclusion_ranges = []
+        
+        # Initialize market cap variable
+        self.show_market_cap_var = None
         
         # Create window
         self.window = tk.Toplevel(parent)
@@ -166,6 +178,26 @@ class AssetAnalysisWindow:
         ttk.Label(info_frame, text=f"Symbol: {self.symbol}", font=('Arial', 12, 'bold')).pack(anchor=tk.W)
         ttk.Label(info_frame, text=f"Type: {self.asset_type.title()}").pack(anchor=tk.W)
         ttk.Label(info_frame, text=f"Company: {self.asset_data.get('company_name', 'Unknown')}").pack(anchor=tk.W)
+        
+        # Show IPO date for equities
+        if self.asset_type == "equities":
+            ipo_date = self.asset_data.get('ipo_date', 'Unknown')
+            if ipo_date != 'Unknown':
+                try:
+                    # Format the date nicely
+                    ipo_formatted = pd.to_datetime(ipo_date).strftime('%B %d, %Y')
+                    ttk.Label(info_frame, text=f"IPO Date: {ipo_formatted}").pack(anchor=tk.W)
+                except:
+                    ttk.Label(info_frame, text=f"IPO Date: {ipo_date}").pack(anchor=tk.W)
+            else:
+                ttk.Label(info_frame, text="IPO Date: Unknown").pack(anchor=tk.W)
+            
+            # Show market cap if available
+            latest_market_cap = self.asset_data.get('latest_market_cap')
+            if latest_market_cap:
+                market_cap_billions = latest_market_cap / 1e9
+                ttk.Label(info_frame, text=f"Market Cap: ${market_cap_billions:.2f}B").pack(anchor=tk.W)
+        
         ttk.Label(info_frame, text=f"Latest Price: ${self.asset_data.get('latest_price', 'N/A')}").pack(anchor=tk.W)
     
     def setup_chart_controls_section(self, parent):
@@ -207,6 +239,13 @@ class AssetAnalysisWindow:
         ttk.Checkbutton(options_frame, text="Enable Price Highlighter", 
                        variable=self.highlighter_var,
                        command=self.toggle_highlighter).pack(anchor=tk.W)
+        
+        # Market cap toggle (only for equities)
+        if self.asset_type == "equities" and self.asset_data.get('market_cap_history'):
+            self.show_market_cap_var = tk.BooleanVar(value=False)
+            ttk.Checkbutton(options_frame, text="Show Market Cap (Secondary Axis)", 
+                           variable=self.show_market_cap_var,
+                           command=self.toggle_market_cap).pack(anchor=tk.W)
         
         # Zoom controls
         zoom_frame = ttk.Frame(chart_controls_frame)
@@ -507,6 +546,11 @@ class AssetAnalysisWindow:
         """Toggle the price highlighter on/off."""
         if hasattr(self, 'chart_controller'):
             self.chart_controller.toggle_highlighter()
+    
+    def toggle_market_cap(self):
+        """Toggle the market cap display on/off."""
+        if hasattr(self, 'chart_controller'):
+            self.chart_controller.update_chart()
     
     def zoom_in(self):
         """Zoom in by a fixed factor."""

@@ -305,3 +305,173 @@ class DataManager:
                     asset_list.append((symbol, a_type))
         
         return sorted(asset_list)
+
+    def download_asset_data(self, symbol: str, asset_type: str, period: str = "max") -> Dict:
+        """
+        Download historical data for an asset using yfinance.
+        Enhanced version that includes market cap and IPO data for equities.
+        """
+        try:
+            ticker = yf.Ticker(symbol)
+            
+            # Get historical data
+            hist_data = ticker.history(period=period)
+            
+            if hist_data.empty:
+                raise ValueError(f"No data found for symbol {symbol}")
+            
+            # Get basic info
+            info = ticker.info
+            
+            # Prepare asset data structure
+            asset_data = {
+                "symbol": symbol,
+                "asset_type": asset_type,
+                "company_name": info.get("longName", "Unknown"),
+                "currency": info.get("currency", "USD"),
+                "exchange": info.get("exchange", "Unknown"),
+                "sector": info.get("sector", "Unknown"),
+                "industry": info.get("industry", "Unknown"),
+                "ipo_date": self._get_ipo_date(info),
+                "last_data_pull": datetime.now().isoformat(),
+                "latest_price": float(hist_data['Close'].iloc[-1]),
+                "data_period": period,
+                "total_records": len(hist_data),
+                "date_range": {
+                    "start": hist_data.index[0].isoformat(),
+                    "end": hist_data.index[-1].isoformat()
+                },
+                "historical_data": self._convert_dataframe_to_dict(hist_data)
+            }
+            
+            # Add equity-specific data (market cap history and better IPO date)
+            if asset_type == "equities":
+                try:
+                    # Enhanced IPO date retrieval
+                    enhanced_ipo_date = self._get_enhanced_ipo_date(ticker, info)
+                    if enhanced_ipo_date != "Unknown":
+                        asset_data["ipo_date"] = enhanced_ipo_date
+                    
+                    # Get market cap history
+                    market_cap_data = self._get_market_cap_history(ticker, hist_data, info)
+                    if market_cap_data:
+                        asset_data["market_cap_history"] = market_cap_data
+                        asset_data["latest_market_cap"] = market_cap_data[-1]["market_cap"] if market_cap_data else None
+                    
+                    # Additional equity metrics
+                    asset_data["shares_outstanding"] = info.get("sharesOutstanding")
+                    asset_data["float_shares"] = info.get("floatShares")
+                    asset_data["market_cap"] = info.get("marketCap")
+                    
+                    print(f"Enhanced equity data collected for {symbol}")
+                    
+                except Exception as e:
+                    print(f"Warning: Could not collect enhanced equity data for {symbol}: {e}")
+                    # Continue without enhanced data - don't fail the entire download
+            
+            return asset_data
+            
+        except Exception as e:
+            raise Exception(f"Error downloading data for {symbol}: {str(e)}")
+
+    def _get_enhanced_ipo_date(self, ticker, info: Dict) -> str:
+        """Get IPO date with multiple fallback methods."""
+        try:
+            # Method 1: Try the info dictionary first
+            ipo_date = info.get("ipoDate")
+            if ipo_date:
+                return ipo_date
+            
+            # Method 2: Try first trade date
+            first_trade = info.get("firstTradeDateEpochUtc")
+            if first_trade:
+                return datetime.fromtimestamp(first_trade).date().isoformat()
+            
+            # Method 3: Try to get earliest available data
+            # Get maximum period data and look at the earliest date
+            try:
+                early_data = ticker.history(period="max")
+                if not early_data.empty:
+                    earliest_date = early_data.index[0].date()
+                    return earliest_date.isoformat()
+            except:
+                pass
+            
+            return "Unknown"
+            
+        except Exception as e:
+            print(f"Warning: Could not determine IPO date: {e}")
+            return "Unknown"
+
+    def _get_market_cap_history(self, ticker, hist_data: pd.DataFrame, info: Dict) -> List[Dict]:
+        """
+        Calculate historical market cap using price and shares outstanding.
+        
+        Returns:
+            List of dictionaries with date and market_cap
+        """
+        try:
+            # Get shares outstanding - try multiple sources
+            shares_outstanding = None
+            
+            # Try current shares outstanding first
+            shares_outstanding = info.get("sharesOutstanding")
+            
+            if not shares_outstanding:
+                shares_outstanding = info.get("impliedSharesOutstanding")
+            
+            if not shares_outstanding:
+                # Try to get from balance sheet or other sources
+                try:
+                    balance_sheet = ticker.quarterly_balance_sheet
+                    if not balance_sheet.empty and "Ordinary Shares Number" in balance_sheet.index:
+                        shares_outstanding = balance_sheet.loc["Ordinary Shares Number"].iloc[0]
+                except:
+                    pass
+            
+            if not shares_outstanding or shares_outstanding <= 0:
+                print(f"Warning: Could not determine shares outstanding for market cap calculation")
+                return []
+            
+            # Calculate market cap history
+            market_cap_history = []
+            
+            # Sample the data to avoid too many points - take every 30 days or so
+            sample_freq = max(1, len(hist_data) // 365)  # Roughly one point per month for long histories
+            
+            for i, (date, row) in enumerate(hist_data.iterrows()):
+                if i % sample_freq == 0 or i == len(hist_data) - 1:  # Sample + always include last point
+                    try:
+                        close_price = float(row['Close'])
+                        market_cap = close_price * shares_outstanding
+                        
+                        market_cap_history.append({
+                            "date": date.isoformat(),
+                            "market_cap": market_cap,
+                            "market_cap_billions": round(market_cap / 1e9, 2),  # In billions for readability
+                            "price": close_price
+                        })
+                    except (ValueError, TypeError):
+                        continue
+            
+            print(f"Calculated {len(market_cap_history)} market cap data points")
+            return market_cap_history
+            
+        except Exception as e:
+            print(f"Warning: Could not calculate market cap history: {e}")
+            return []
+
+    def _convert_dataframe_to_dict(self, df: pd.DataFrame) -> List[Dict]:
+        """Convert pandas DataFrame to list of dictionaries."""
+        data_list = []
+        for date, row in df.iterrows():
+            data_point = {
+                "date": date.isoformat(),
+                "open": float(row['Open']) if pd.notna(row['Open']) else None,
+                "high": float(row['High']) if pd.notna(row['High']) else None,
+                "low": float(row['Low']) if pd.notna(row['Low']) else None,
+                "close": float(row['Close']) if pd.notna(row['Close']) else None,
+                "volume": int(row['Volume']) if pd.notna(row['Volume']) else None
+            }
+            data_list.append(data_point)
+        return data_list

@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import threading
+import pandas as pd
 from typing import Dict, List, Optional
 from src.data_management.data_manager import DataManager
 from src.projects.project_manager import project_manager, graphing_project_manager
@@ -586,12 +587,12 @@ class MainApplication:
                 project['project_type'],
                 modified_date
             ))
-    
+
     def show_assets_window(self):
         """Show window with all tracked assets."""
         assets_window = tk.Toplevel(self.root)
         assets_window.title("View Assets")
-        assets_window.geometry("900x600")
+        assets_window.geometry("1100x600")  # Made wider for IPO column
         
         # Create main frame
         main_frame = ttk.Frame(assets_window, padding="10")
@@ -617,28 +618,61 @@ class MainApplication:
             frame = ttk.Frame(notebook)
             notebook.add(frame, text=asset_type.title())
             
-            # Create treeview for assets
-            columns = ('symbol', 'name', 'price', 'last_update')
+            # Create treeview for assets - added IPO date column
+            if asset_type == "equities":
+                columns = ('symbol', 'name', 'price', 'ipo_date', 'market_cap', 'last_update')
+                column_widths = {'symbol': 80, 'name': 200, 'price': 100, 'ipo_date': 100, 'market_cap': 120, 'last_update': 150}
+                headings = {'symbol': 'Symbol', 'name': 'Company Name', 'price': 'Latest Price', 
+                           'ipo_date': 'IPO Date', 'market_cap': 'Market Cap', 'last_update': 'Last Updated'}
+            else:
+                columns = ('symbol', 'name', 'price', 'last_update')
+                column_widths = {'symbol': 100, 'name': 300, 'price': 100, 'last_update': 150}
+                headings = {'symbol': 'Symbol', 'name': 'Company Name', 'price': 'Latest Price', 'last_update': 'Last Updated'}
+            
             tree = ttk.Treeview(frame, columns=columns, show='headings')
             
-            tree.heading('symbol', text='Symbol')
-            tree.heading('name', text='Company Name')
-            tree.heading('price', text='Latest Price')
-            tree.heading('last_update', text='Last Updated')
-            
-            tree.column('symbol', width=100)
-            tree.column('name', width=300)
-            tree.column('price', width=100)
-            tree.column('last_update', width=150)
+            # Set up columns
+            for col in columns:
+                tree.heading(col, text=headings[col])
+                tree.column(col, width=column_widths[col])
             
             # Add assets to tree
             for symbol, data in assets.items():
-                tree.insert('', tk.END, values=(
-                    symbol,
-                    data.get('company_name', 'Unknown'),
-                    f"${data.get('latest_price', 'N/A')}",
-                    data.get('last_data_pull', 'Unknown')[:19].replace('T', ' ')
-                ))
+                if asset_type == "equities":
+                    # Format IPO date
+                    ipo_date = data.get('ipo_date', 'Unknown')
+                    if ipo_date and ipo_date != 'Unknown':
+                        try:
+                            ipo_formatted = pd.to_datetime(ipo_date).strftime('%Y-%m-%d')
+                        except:
+                            ipo_formatted = str(ipo_date)
+                    else:
+                        ipo_formatted = 'Unknown'
+                    
+                    # Format market cap
+                    market_cap = data.get('latest_market_cap')
+                    if market_cap:
+                        market_cap_billions = market_cap / 1e9
+                        market_cap_str = f"${market_cap_billions:.2f}B"
+                    else:
+                        market_cap_str = 'Unknown'
+                    
+                    tree.insert('', tk.END, values=(
+                        symbol,
+                        data.get('company_name', 'Unknown'),
+                        f"${data.get('latest_price', 'N/A')}",
+                        ipo_formatted,
+                        market_cap_str,
+                        data.get('last_data_pull', 'Unknown')[:19].replace('T', ' ')
+                    ))
+                else:
+                    # Non-equity assets (no IPO date or market cap)
+                    tree.insert('', tk.END, values=(
+                        symbol,
+                        data.get('company_name', 'Unknown'),
+                        f"${data.get('latest_price', 'N/A')}",
+                        data.get('last_data_pull', 'Unknown')[:19].replace('T', ' ')
+                    ))
             
             # Add scrollbar
             scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
@@ -686,7 +720,7 @@ class MainApplication:
         assets_window.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(1, weight=1)
-    
+
     def analyze_selected_asset(self, tree, asset_type):
         """Open analysis window for the selected asset."""
         selection = tree.selection()
