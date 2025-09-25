@@ -24,6 +24,8 @@ class ChartController:
         
         # Chart data
         self.df = pd.DataFrame()  # Main price data
+        self.market_cap_df = None  # Market cap data
+        self.ax2 = None  # Secondary axis for market cap
         
         # Chart interaction variables
         self.zoom_enabled = True
@@ -102,17 +104,23 @@ class ChartController:
                              self.parent.asset_type == "equities" and
                              self.parent.asset_data.get('market_cap_history'))
             
-            # Create secondary axis if needed
-            ax2 = None
+            # Clear or create secondary axis if needed
             if show_market_cap:
-                ax2 = self.ax.twinx()
+                if self.ax2 is None:
+                    self.ax2 = self.ax.twinx()
+            else:
+                # Remove secondary axis if it exists and we don't need it
+                if self.ax2 is not None:
+                    self.ax2.remove()
+                    self.ax2 = None
+                self.market_cap_df = None
             
             # Plot price line
             line1 = self.ax.plot(filtered_df.index, filtered_df['close'], 
                         label=f"{self.parent.symbol} Price", linewidth=2, color='blue')
             
             # Plot market cap if enabled
-            if show_market_cap and ax2:
+            if show_market_cap and self.ax2:
                 # Get market cap data and filter by date range
                 market_cap_data = self.parent.asset_data['market_cap_history']
                 market_cap_df = pd.DataFrame(market_cap_data)
@@ -129,12 +137,16 @@ class ChartController:
                 ]
                 
                 if not filtered_market_cap.empty:
-                    line2 = ax2.plot(filtered_market_cap.index, filtered_market_cap['market_cap_billions'], 
+                    # Store for use in crosshair
+                    self.market_cap_df = filtered_market_cap
+                    
+                    line2 = self.ax2.plot(filtered_market_cap.index, filtered_market_cap['market_cap_billions'], 
                             label=f"{self.parent.symbol} Market Cap", linewidth=2, color='green', alpha=0.7)
-                    ax2.set_ylabel("Market Cap (Billions $)", color='green')
-                    ax2.tick_params(axis='y', labelcolor='green')
+                    self.ax2.set_ylabel("Market Cap (Billions $)", color='green')
+                    self.ax2.tick_params(axis='y', labelcolor='green')
                 else:
                     print("No market cap data found for the selected date range")
+                    self.market_cap_df = None
             
             # Plot events as vertical lines
             for event in self.parent.events:
@@ -176,10 +188,10 @@ class ChartController:
             self.ax.tick_params(axis='y', labelcolor='blue')
             
             # Combine legends if we have both price and market cap
-            if show_market_cap and ax2:
+            if show_market_cap and self.ax2:
                 # Get handles and labels from both axes
                 lines1, labels1 = self.ax.get_legend_handles_labels()
-                lines2, labels2 = ax2.get_legend_handles_labels()
+                lines2, labels2 = self.ax2.get_legend_handles_labels()
                 self.ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
             else:
                 self.ax.legend()
@@ -352,7 +364,8 @@ class ChartController:
     
     def on_mouse_move(self, event):
         """Handle mouse movement for both panning and highlighting."""
-        if event.inaxes != self.ax:
+        # Check if mouse is in either axis (primary or secondary)
+        if event.inaxes != self.ax and event.inaxes != self.ax2:
             return
             
         try:
@@ -380,7 +393,11 @@ class ChartController:
     
     def update_crosshair(self, event):
         """Update crosshair and price information."""
-        if not self.highlighter_enabled or event.inaxes != self.ax:
+        if not self.highlighter_enabled:
+            return
+        
+        # Work with whichever axis the mouse is in
+        if event.inaxes != self.ax and event.inaxes != self.ax2:
             return
         
         # Performance throttling
@@ -398,7 +415,7 @@ class ChartController:
             if self.price_info_text:
                 self.price_info_text.remove()
             
-            # Draw new crosshair
+            # Draw new crosshair - always on primary axis
             self.crosshair_v = self.ax.axvline(event.xdata, color='red', alpha=0.7, linestyle='--')
             self.crosshair_h = self.ax.axhline(event.ydata, color='red', alpha=0.7, linestyle='--')
             
@@ -412,18 +429,32 @@ class ChartController:
                     closest_date = self.df.index[closest_idx]
                     closest_row = self.df.iloc[closest_idx]
                     
-                    # Create info text
+                    # Create info text with price data
                     info_text = f"Date: {closest_date.strftime('%Y-%m-%d')}\n"
                     info_text += f"Open: ${closest_row['open']:.2f}\n"
                     info_text += f"High: ${closest_row['high']:.2f}\n"
                     info_text += f"Low: ${closest_row['low']:.2f}\n"
                     info_text += f"Close: ${closest_row['close']:.2f}\n"
                     if pd.notna(closest_row['volume']):
-                        info_text += f"Volume: {closest_row['volume']:,}"
+                        info_text += f"Volume: {closest_row['volume']:,}\n"
+                    
+                    # Add market cap info if available
+                    if self.market_cap_df is not None and not self.market_cap_df.empty:
+                        try:
+                            # Find closest market cap date
+                            mc_idx = self.market_cap_df.index.get_indexer([closest_date], method='nearest')[0]
+                            if 0 <= mc_idx < len(self.market_cap_df):
+                                mc_row = self.market_cap_df.iloc[mc_idx]
+                                info_text += f"\nMarket Cap: ${mc_row['market_cap_billions']:.2f}B"
+                        except Exception as e:
+                            print(f"Error getting market cap for crosshair: {e}")
+                    
+                    # Position info box - move down if market cap is displayed to avoid legend
+                    y_position = 0.90 if self.market_cap_df is not None else 0.98
                     
                     # Position info box
                     self.price_info_text = self.ax.text(
-                        0.02, 0.98, info_text,
+                        0.02, y_position, info_text,
                         transform=self.ax.transAxes,
                         fontsize=10,
                         verticalalignment='top',
@@ -435,6 +466,7 @@ class ChartController:
             self.canvas.draw_idle()
             
         except Exception as e:
+            print(f"Error updating crosshair: {e}")
             pass  # Silently handle errors to avoid disrupting mouse movement
     
     def toggle_highlighter(self):
@@ -540,6 +572,13 @@ class ChartController:
             if self.price_info_text:
                 try:
                     self.price_info_text.remove()
+                except:
+                    pass
+            
+            # Remove secondary axis if it exists
+            if self.ax2:
+                try:
+                    self.ax2.remove()
                 except:
                     pass
             

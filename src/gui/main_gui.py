@@ -590,6 +590,8 @@ class MainApplication:
 
     def show_assets_window(self):
         """Show window with all tracked assets."""
+        import pandas as pd  # Make sure pandas is imported
+        
         assets_window = tk.Toplevel(self.root)
         assets_window.title("View Assets")
         assets_window.geometry("1100x600")  # Made wider for IPO column
@@ -618,7 +620,7 @@ class MainApplication:
             frame = ttk.Frame(notebook)
             notebook.add(frame, text=asset_type.title())
             
-            # Create treeview for assets - added IPO date column
+            # Create treeview for assets - added IPO date column for equities
             if asset_type == "equities":
                 columns = ('symbol', 'name', 'price', 'ipo_date', 'market_cap', 'last_update')
                 column_widths = {'symbol': 80, 'name': 200, 'price': 100, 'ipo_date': 100, 'market_cap': 120, 'last_update': 150}
@@ -639,6 +641,9 @@ class MainApplication:
             # Add assets to tree
             for symbol, data in assets.items():
                 if asset_type == "equities":
+                    # Load full asset data to get market cap
+                    full_asset_data = self.data_manager.load_asset_data(symbol, asset_type)
+                    
                     # Format IPO date
                     ipo_date = data.get('ipo_date', 'Unknown')
                     if ipo_date and ipo_date != 'Unknown':
@@ -649,13 +654,19 @@ class MainApplication:
                     else:
                         ipo_formatted = 'Unknown'
                     
-                    # Format market cap
-                    market_cap = data.get('latest_market_cap')
-                    if market_cap:
-                        market_cap_billions = market_cap / 1e9
-                        market_cap_str = f"${market_cap_billions:.2f}B"
-                    else:
-                        market_cap_str = 'Unknown'
+                    # Format market cap - try to get from full data first
+                    market_cap_str = 'Unknown'
+                    if full_asset_data:
+                        # Try latest_market_cap first
+                        market_cap = full_asset_data.get('latest_market_cap')
+                        if market_cap:
+                            market_cap_billions = market_cap / 1e9
+                            market_cap_str = f"${market_cap_billions:.2f}B"
+                        # Fallback to current market_cap field
+                        elif full_asset_data.get('market_cap'):
+                            market_cap = full_asset_data.get('market_cap')
+                            market_cap_billions = market_cap / 1e9
+                            market_cap_str = f"${market_cap_billions:.2f}B"
                     
                     tree.insert('', tk.END, values=(
                         symbol,
