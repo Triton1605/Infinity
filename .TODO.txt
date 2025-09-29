@@ -12,3 +12,4 @@
 -create options simulator
 -create options suggestion from default asset analysis config
 -fix asset analysis zoom feature. Should adjust axis.
+-get rid of stupid error reports like "please select asset" after double click

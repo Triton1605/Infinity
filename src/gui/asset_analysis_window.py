@@ -640,37 +640,26 @@ class AssetAnalysisWindow:
     
     # Event and data management methods
     def load_events(self) -> List[Dict]:
-        """Load events for this asset."""
-        events_file = self.get_events_file_path()
-        if os.path.exists(events_file):
-            try:
-                with open(events_file, 'r') as f:
-                    return json.load(f)
-            except Exception as e:
-                print(f"Error loading events: {e}")
-                return []
-        return []
-    
+        """Load events for this asset from the data manager."""
+        return self.data_manager.load_asset_events(self.symbol, self.asset_type)
+
     def save_events(self):
-        """Save events for this asset."""
+        """Save events for this asset using the data manager."""
         if self.is_closing:
             return
         
-        events_file = self.get_events_file_path()
-        os.makedirs(os.path.dirname(events_file), exist_ok=True)
-        
         try:
-            with open(events_file, 'w') as f:
-                json.dump(self.events, f, indent=2)
+            success = self.data_manager.save_asset_events(self.symbol, self.asset_type, self.events)
+            if not success:
+                print(f"Warning: Failed to save events for {self.symbol}")
         except Exception as e:
             print(f"Error saving events: {e}")
             messagebox.showerror("Save Error", f"Could not save events: {str(e)}")
-    
+
     def get_events_file_path(self) -> str:
         """Get the file path for events storage."""
-        asset_dir = filepath_manager.get_asset_dir(self.asset_type)
-        return os.path.join(asset_dir, f"{self.symbol}_events.json")
-    
+        return self.data_manager.get_asset_events_file_path(self.asset_type, self.symbol)
+        
     def populate_events_list(self):
         """Populate the events listbox."""
         if self.is_closing or not self.events_listbox:
