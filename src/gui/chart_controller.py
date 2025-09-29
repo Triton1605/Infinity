@@ -85,7 +85,7 @@ class ChartController:
         try:
             self.ax.clear()
             
-            # Clear crosshair elements
+            # Clear crosshair elements safely
             self.crosshair_v = None
             self.crosshair_h = None
             self.price_info_text = None
@@ -100,6 +100,7 @@ class ChartController:
             
             # Check if we should show market cap
             show_market_cap = (hasattr(self.parent, 'show_market_cap_var') and 
+                             self.parent.show_market_cap_var and
                              self.parent.show_market_cap_var.get() and
                              self.parent.asset_type == "equities" and
                              self.parent.asset_data.get('market_cap_history'))
@@ -153,13 +154,13 @@ class ChartController:
                 if event['type'] == 'single':
                     event_date = pd.to_datetime(event['date'])
                     if filtered_df.index.min() <= event_date <= filtered_df.index.max():
-                        self.ax.axvline(event_date, color='red', linestyle='--', alpha=0.7, linewidth=2)
+                        self.ax.axvline(event_date, color='green', linestyle='--', alpha=0.7, linewidth=2)
                         
                         # Add event label
                         y_max = self.ax.get_ylim()[1]
                         self.ax.text(event_date, y_max * 0.95, event['label'], 
                                     rotation=90, verticalalignment='top', 
-                                    fontsize=9, color='red', alpha=0.8)
+                                    fontsize=9, color='green', alpha=0.8)
                 
                 elif event['type'] == 'range':
                     start_date = pd.to_datetime(event['start_date'])
@@ -400,6 +401,10 @@ class ChartController:
         if event.inaxes != self.ax and event.inaxes != self.ax2:
             return
         
+        # Validate event data
+        if event.xdata is None or event.ydata is None:
+            return
+        
         # Performance throttling
         current_time = time.time() * 1000
         if current_time - self.last_mouse_time < 50:
@@ -407,13 +412,27 @@ class ChartController:
         self.last_mouse_time = current_time
         
         try:
-            # Clear previous crosshair
-            if self.crosshair_v:
-                self.crosshair_v.remove()
-            if self.crosshair_h:
-                self.crosshair_h.remove()
-            if self.price_info_text:
-                self.price_info_text.remove()
+            # Clear previous crosshair safely
+            if self.crosshair_v is not None:
+                try:
+                    self.crosshair_v.remove()
+                except (ValueError, AttributeError):
+                    pass  # Object may already be removed or invalid
+                self.crosshair_v = None
+                
+            if self.crosshair_h is not None:
+                try:
+                    self.crosshair_h.remove()
+                except (ValueError, AttributeError):
+                    pass  # Object may already be removed or invalid
+                self.crosshair_h = None
+                
+            if self.price_info_text is not None:
+                try:
+                    self.price_info_text.remove()
+                except (ValueError, AttributeError):
+                    pass  # Object may already be removed or invalid
+                self.price_info_text = None
             
             # Draw new crosshair - always on primary axis
             self.crosshair_v = self.ax.axvline(event.xdata, color='red', alpha=0.7, linestyle='--')
@@ -431,12 +450,24 @@ class ChartController:
                     
                     # Create info text with price data
                     info_text = f"Date: {closest_date.strftime('%Y-%m-%d')}\n"
-                    info_text += f"Open: ${closest_row['open']:.2f}\n"
-                    info_text += f"High: ${closest_row['high']:.2f}\n"
-                    info_text += f"Low: ${closest_row['low']:.2f}\n"
-                    info_text += f"Close: ${closest_row['close']:.2f}\n"
-                    if pd.notna(closest_row['volume']):
-                        info_text += f"Volume: {closest_row['volume']:,}\n"
+                    
+                    # Safely handle potential None values
+                    open_val = closest_row.get('open')
+                    high_val = closest_row.get('high')
+                    low_val = closest_row.get('low')
+                    close_val = closest_row.get('close')
+                    volume_val = closest_row.get('volume')
+                    
+                    if open_val is not None:
+                        info_text += f"Open: ${open_val:.2f}\n"
+                    if high_val is not None:
+                        info_text += f"High: ${high_val:.2f}\n"
+                    if low_val is not None:
+                        info_text += f"Low: ${low_val:.2f}\n"
+                    if close_val is not None:
+                        info_text += f"Close: ${close_val:.2f}\n"
+                    if volume_val is not None and pd.notna(volume_val):
+                        info_text += f"Volume: {int(volume_val):,}\n"
                     
                     # Add market cap info if available
                     if self.market_cap_df is not None and not self.market_cap_df.empty:
@@ -445,7 +476,9 @@ class ChartController:
                             mc_idx = self.market_cap_df.index.get_indexer([closest_date], method='nearest')[0]
                             if 0 <= mc_idx < len(self.market_cap_df):
                                 mc_row = self.market_cap_df.iloc[mc_idx]
-                                info_text += f"\nMarket Cap: ${mc_row['market_cap_billions']:.2f}B"
+                                mc_val = mc_row.get('market_cap_billions')
+                                if mc_val is not None:
+                                    info_text += f"\nMarket Cap: ${mc_val:.2f}B"
                         except Exception as e:
                             print(f"Error getting market cap for crosshair: {e}")
                     
@@ -467,7 +500,7 @@ class ChartController:
             
         except Exception as e:
             print(f"Error updating crosshair: {e}")
-            pass  # Silently handle errors to avoid disrupting mouse movement
+            # Continue gracefully without crosshair
     
     def toggle_highlighter(self):
         """Toggle the price highlighter on/off."""
@@ -477,15 +510,24 @@ class ChartController:
             self.mouse_move_connected = True
         else:
             self.mouse_move_connected = False
-            # Clear existing crosshair
-            if self.crosshair_v:
-                self.crosshair_v.remove()
+            # Clear existing crosshair safely
+            if self.crosshair_v is not None:
+                try:
+                    self.crosshair_v.remove()
+                except (ValueError, AttributeError):
+                    pass
                 self.crosshair_v = None
-            if self.crosshair_h:
-                self.crosshair_h.remove()
+            if self.crosshair_h is not None:
+                try:
+                    self.crosshair_h.remove()
+                except (ValueError, AttributeError):
+                    pass
                 self.crosshair_h = None
-            if self.price_info_text:
-                self.price_info_text.remove()
+            if self.price_info_text is not None:
+                try:
+                    self.price_info_text.remove()
+                except (ValueError, AttributeError):
+                    pass
                 self.price_info_text = None
             self.canvas.draw()
     
@@ -558,22 +600,27 @@ class ChartController:
     def cleanup(self):
         """Clean up chart controller resources."""
         try:
-            # Clear crosshair elements
-            if self.crosshair_v:
+            # Clear crosshair elements safely
+            if self.crosshair_v is not None:
                 try:
                     self.crosshair_v.remove()
-                except:
+                except (ValueError, AttributeError):
                     pass
-            if self.crosshair_h:
+                self.crosshair_v = None
+                
+            if self.crosshair_h is not None:
                 try:
                     self.crosshair_h.remove()
-                except:
+                except (ValueError, AttributeError):
                     pass
-            if self.price_info_text:
+                self.crosshair_h = None
+                
+            if self.price_info_text is not None:
                 try:
                     self.price_info_text.remove()
-                except:
+                except (ValueError, AttributeError):
                     pass
+                self.price_info_text = None
             
             # Remove secondary axis if it exists
             if self.ax2:
@@ -581,6 +628,7 @@ class ChartController:
                     self.ax2.remove()
                 except:
                     pass
+                self.ax2 = None
             
             # Disconnect mouse events
             self.mouse_move_connected = False

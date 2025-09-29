@@ -87,25 +87,41 @@ def main():
         return 1
     
     try:
-        # Create and run the main application
+        # Create the main application
         app = MainApplication()
         print("Application initialized successfully.")
         print("GUI is now running...")
         print("Press Ctrl+C to exit or use the window's close button.")
         
-        # Handle Ctrl+C gracefully
+        # Set up signal handler for Ctrl+C
         import signal
+        
         def signal_handler(sig, frame):
-            print("\nReceived interrupt signal. Closing application...")
+            print("\n\nReceived interrupt signal (Ctrl+C). Closing application...")
             try:
+                # Force immediate exit
                 app.root.quit()
                 app.root.destroy()
             except:
                 pass
-            sys.exit(0)
+            # Force exit
+            os._exit(0)
         
         signal.signal(signal.SIGINT, signal_handler)
         
+        # Periodic check for signals (this allows Ctrl+C to work immediately)
+        def check_for_exit():
+            """Periodic callback to allow signal processing."""
+            try:
+                # Schedule next check
+                app.root.after(100, check_for_exit)
+            except:
+                pass
+        
+        # Start periodic checking
+        app.root.after(100, check_for_exit)
+        
+        # Run the application
         app.run()
         
     except KeyboardInterrupt:

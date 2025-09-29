@@ -1,15 +1,14 @@
--pull historic market cap
 -don't prompt to save if no changes are made
 -not saving graphing configs properly
 -make errors copyable
 -add median and average price-based sentiment
 -asset analysis to compare against other asset patterns
--show date of IPO
 -find similar patterns based on % input
 -output number of data points based on asset patterns for machine learning
 -keep selected asset selected
--keep errors from bringing menu to the top/front
+-keep errors (and any prompt window) from bringing menu to the top/front
 -create a factory reset BASH script
 -delete events with deleted assets
 -create options simulator
 -create options suggestion from default asset analysis config
+-fix asset analysis zoom feature. Should adjust axis.
