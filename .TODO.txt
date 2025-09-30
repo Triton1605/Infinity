@@ -8,7 +8,6 @@
 -keep selected asset selected
 -keep errors (and any prompt window) from bringing menu to the top/front
 -create a factory reset BASH script
--delete events with deleted assets
 -create options simulator
 -create options suggestion from default asset analysis config
 -fix asset analysis zoom feature. Should adjust axis.
