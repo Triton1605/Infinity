@@ -1,0 +1,32 @@
+{
+  "project_name": "Test Project Scooby",
+  "project_type": "graphing",
+  "created_date": "2025-09-29T21:11:59.085248",
+  "last_modified": "2025-09-29T21:11:59.085323",
+  "config": {
+    "assets": [
+      {
+        "symbol": "GOOG",
+        "asset_type": "equities"
+      }
+    ],
+    "chart_config": {
+      "chart_types": [
+        "candlestick"
+      ],
+      "overlays": [],
+      "include_weekends": false,
+      "resolution": "weekly"
+    },
+    "date_config": {
+      "time_range": "1m",
+      "custom_start": null,
+      "custom_end": null
+    },
+    "exclusions": {
+      "date_ranges": [],
+      "specific_dates": []
+    }
+  },
+  "version": "1.0"
+}

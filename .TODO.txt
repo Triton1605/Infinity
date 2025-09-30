@@ -1,5 +1,3 @@
--don't prompt to save if no changes are made
--not saving graphing configs properly
 -make errors copyable
 -add median and average price-based sentiment
 -asset analysis to compare against other asset patterns
